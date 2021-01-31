@@ -28,13 +28,14 @@ namespace errors {
   
   struct Error {
     String message;
+    bool ok;
     
-    Error(): message("<err>") {} 
+    Error(): message("<err>"), ok(false) {} 
     Error(String message): message(message) {} 
     Error(String message, Error error): message(message + ": " + error.toString()) {} 
 
     bool isOk() const {
-      return false;
+      return ok;
     }
 
     String toString() {
@@ -42,12 +43,12 @@ namespace errors {
     }
   };
 
-  struct Ok : Error {
-    Ok(): Error("<ok>") {}
-    bool isOk() const {
-      return true;
-    }
-  };
+  
+  Error ok() {
+    Error ok("ok");
+    ok.ok = true;
+    return ok;
+  }
 
   void logIfError(Error e) {
     if (!e.isOk()) {

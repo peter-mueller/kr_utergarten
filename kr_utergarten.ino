@@ -14,6 +14,9 @@ namespace nodemcu {
   static const uint8_t D8   = 15;
   static const uint8_t D9   = 3;
   static const uint8_t D10  = 1;
+
+  static const uint8_t A0  = 17;
+
 }
 
 
@@ -35,20 +38,27 @@ namespace devices {
         return errors::Error("Kein Pin für Waterpump konfiguriert");
       }
       pinMode(pin, OUTPUT);
-      return errors::Ok();
+      digitalWrite(pin, LOW);
+      return errors::ok();
     }
   };
   
   struct CapacativeSoilMoistureSensor {
     int pin = -1;
     
-    int analogValueInWater = 310;
-    int analogValueInAir = 620;
+    int analogValueInWater = 310; // 400
+    int analogValueInAir = 620; // 800
     int wetTresholdPercentage = 71;
+
+    CapacativeSoilMoistureSensor() {
+            logger::info("ctor CapacativeSoilMoistureSensor");
+    };
+
     
     
-    int getWettnessPercent() {
+    virtual int getWettnessPercent() {
       const int value = analogRead(pin);
+      logger::info("Wetness Analog value: " + String(value));
       const int percentage = map(value, analogValueInAir, analogValueInWater, 0, 100);
       return constrain(percentage, 0, 100);
     } 
@@ -58,12 +68,38 @@ namespace devices {
       return percentage >= wetTresholdPercentage;
     }
     
-    errors::Error init() {
+    virtual errors::Error init() {
       if (pin == -1) {
         return errors::Error("Kein Pin für CapacativeSoilMoistureSensor konfiguriert");
       }
-      pinMode(pin, INPUT); // analog 0 to 1023
-      return errors::Ok();
+      return errors::ok();
+    }
+  };
+
+  struct MultiplexedCapacativeSoilMoistureSensor : CapacativeSoilMoistureSensor {
+    int activatePin = -1;
+
+    MultiplexedCapacativeSoilMoistureSensor() {
+                  logger::info("ctor MultiplexedCapacativeSoilMoistureSensor");
+    };
+
+    int getWettnessPercent() override {
+      digitalWrite(activatePin, HIGH);
+      delay(50);
+      const int percentage = CapacativeSoilMoistureSensor::getWettnessPercent();
+      digitalWrite(activatePin, LOW);
+      delay(50);
+      return percentage;
+    }
+
+    errors::Error init() override {
+      logger::info("init called");
+      if (activatePin == -1) {
+        return errors::Error("Kein Pin für das aktivieren des  MultiplexedCapacativeSoilMoistureSensor konfiguriert");
+      }
+      pinMode(activatePin, OUTPUT);
+      digitalWrite(activatePin, LOW);
+      return CapacativeSoilMoistureSensor::init();
     }
   };
 
@@ -75,8 +111,8 @@ namespace garten {
     public:
       String name;
       devices::Waterpump waterpump;
-      devices::CapacativeSoilMoistureSensor moistureSensor;
-      errors::Error abortError = errors::Ok();
+      devices::MultiplexedCapacativeSoilMoistureSensor moistureSensor;
+      errors::Error abortError = errors::ok();
 
       PflanzenWasserVersorgung(String name);
       void checkCycle();
@@ -125,7 +161,7 @@ namespace garten {
     if (!err2.isOk()) {
       return errors::Error("Fehler beim initialisieren der PflanzenWasserVersorgung '" + name + "' - Sensor", err2);
     }
-    return errors::Ok();
+    return errors::ok();
   }
 }
 
@@ -135,25 +171,28 @@ garten::PflanzenWasserVersorgung schnittlauch("Schnittlauch");
 
 void setup() {
   logger::init();
+
+  while (!Serial) {}
+
   
   // put your setup code here, to run once:
-  thymian.moistureSensor.pin = nodemcu::D3;
-  thymian.waterpump.pin = nodemcu::D4;
+  thymian.moistureSensor.pin = nodemcu::A0;
+  thymian.moistureSensor.activatePin = D5;
+  thymian.waterpump.pin = nodemcu::D1;
   errors::logIfError(thymian.init());
   
-  basilikum.moistureSensor.pin = nodemcu::D5;
-  basilikum.waterpump.pin = nodemcu::D6;
-  errors::logIfError(basilikum.init());
+  //basilikum.moistureSensor.pin = nodemcu::D6;
+  //basilikum.waterpump.pin = nodemcu::D1;
+  //errors::logIfError(basilikum.init());
 
-  schnittlauch.moistureSensor.pin = nodemcu::D7;
-  schnittlauch.waterpump.pin = nodemcu::D8;
-  errors::logIfError(schnittlauch.init());
+  //schnittlauch.moistureSensor.pin = nodemcu::D7;
+  //schnittlauch.waterpump.pin = nodemcu::D2;
+  //errors::logIfError(schnittlauch.init());
 }
 
 void loop() {
   // put your main code here, to run repeatedly: 
-  delay(250);
   thymian.checkCycle();
-  basilikum.checkCycle();
-  schnittlauch.checkCycle();
+  //basilikum.checkCycle();
+  //schnittlauch.checkCycle();
 }
