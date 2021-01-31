@@ -89,7 +89,7 @@ namespace timer {
   }
 
   boolean Timer::isActive() {
-    return seconds == 0;
+    return seconds != 0;
   }
   
   boolean Timer::isExpired(){

@@ -26,11 +26,11 @@ namespace devices {
     int pin = -1;
     
     void turnOn() {
-      digitalWrite(pin, HIGH);
+      digitalWrite(pin, LOW);
     }
     
     void turnOff() {
-      digitalWrite(pin, LOW);
+      digitalWrite(pin, HIGH);
     }
     
     errors::Error init() {
@@ -38,7 +38,7 @@ namespace devices {
         return errors::Error("Kein Pin für Waterpump konfiguriert");
       }
       pinMode(pin, OUTPUT);
-      digitalWrite(pin, LOW);
+      digitalWrite(pin, HIGH);
       return errors::ok();
     }
   };
@@ -46,9 +46,9 @@ namespace devices {
   struct CapacativeSoilMoistureSensor {
     int pin = -1;
     
-    int analogValueInWater = 310; // 400
-    int analogValueInAir = 620; // 800
-    int wetTresholdPercentage = 71;
+    int analogValueInWater = 400; // 400
+    int analogValueInAir = 800; // 800
+    int wetTresholdPercentage = 60;
 
     CapacativeSoilMoistureSensor() {
             logger::info("ctor CapacativeSoilMoistureSensor");
@@ -58,9 +58,10 @@ namespace devices {
     
     virtual int getWettnessPercent() {
       const int value = analogRead(pin);
-      logger::info("Wetness Analog value: " + String(value));
       const int percentage = map(value, analogValueInAir, analogValueInWater, 0, 100);
-      return constrain(percentage, 0, 100);
+      const int rangedPercentage = constrain(percentage, 0, 100);
+      logger::info("Read Wetness: " + String(rangedPercentage) + "% [t:" + String(wetTresholdPercentage) + "%] " + "Analog value: " + String(value) + "[" + analogValueInAir + "," +  analogValueInWater +"]");
+      return rangedPercentage;
     } 
     
     boolean isWet() {
@@ -115,7 +116,7 @@ namespace garten {
       errors::Error abortError = errors::ok();
 
       PflanzenWasserVersorgung(String name);
-      void checkCycle();
+      errors::Error checkCycle();
       errors::Error init();
       
     private:
@@ -128,10 +129,10 @@ namespace garten {
      name = name;
   }
   
-  void PflanzenWasserVersorgung::checkCycle() {
+  errors::Error PflanzenWasserVersorgung::checkCycle() {
     if (!abortError.isOk()) {
       waterpump.turnOff();
-      return;
+      return abortError;
     }
 
     
@@ -145,11 +146,12 @@ namespace garten {
       if (t.isActive() && t.isExpired()) {
         waterpump.turnOff();
         abortError = errors::Error("PflanzenWasserVersorgung wurde zur Sicherheit deaktiviert, da die Pumpe länger als eine Minute am Stück lief.");
-        return;
+        return abortError;
       }
       
       waterpump.turnOn();
     }
+    return errors::ok();
   }
       
   errors::Error PflanzenWasserVersorgung::init() {
@@ -178,7 +180,7 @@ void setup() {
   // put your setup code here, to run once:
   thymian.moistureSensor.pin = nodemcu::A0;
   thymian.moistureSensor.activatePin = D5;
-  thymian.waterpump.pin = nodemcu::D1;
+  thymian.waterpump.pin = nodemcu::D4;
   errors::logIfError(thymian.init());
   
   //basilikum.moistureSensor.pin = nodemcu::D6;
@@ -192,7 +194,8 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly: 
-  thymian.checkCycle();
+  delay(250);
+  errors::logIfError(thymian.checkCycle());
   //basilikum.checkCycle();
   //schnittlauch.checkCycle();
 }
