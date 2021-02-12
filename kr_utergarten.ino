@@ -86,10 +86,10 @@ namespace devices {
 
     int getWettnessPercent() override {
       digitalWrite(activatePin, HIGH);
-      delay(50);
+      delay(100);
       const int percentage = CapacativeSoilMoistureSensor::getWettnessPercent();
       digitalWrite(activatePin, LOW);
-      delay(50);
+      delay(100);
       return percentage;
     }
 
@@ -116,6 +116,7 @@ namespace garten {
       errors::Error abortError = errors::ok();
 
       PflanzenWasserVersorgung(String name);
+      boolean isActive();
       errors::Error checkCycle();
       errors::Error init();
       
@@ -127,6 +128,10 @@ namespace garten {
       
   PflanzenWasserVersorgung::PflanzenWasserVersorgung(String name) {
      name = name;
+  }
+
+  boolean PflanzenWasserVersorgung::isActive() {
+     return t.isActive();
   }
   
   errors::Error PflanzenWasserVersorgung::checkCycle() {
@@ -180,12 +185,17 @@ void setup() {
   // put your setup code here, to run once:
   thymian.moistureSensor.pin = nodemcu::A0;
   thymian.moistureSensor.activatePin = D5;
+  thymian.moistureSensor.analogValueInWater = 400;
+  basilikum.moistureSensor.analogValueInAir = 800;
   thymian.waterpump.pin = nodemcu::D4;
   errors::logIfError(thymian.init());
   
-  //basilikum.moistureSensor.pin = nodemcu::D6;
-  //basilikum.waterpump.pin = nodemcu::D1;
-  //errors::logIfError(basilikum.init());
+  basilikum.moistureSensor.pin = nodemcu::A0;
+  basilikum.moistureSensor.activatePin = D6;
+  basilikum.moistureSensor.analogValueInWater = 350;
+  basilikum.moistureSensor.analogValueInAir = 635;
+  basilikum.waterpump.pin = nodemcu::D3;
+  errors::logIfError(basilikum.init());
 
   //schnittlauch.moistureSensor.pin = nodemcu::D7;
   //schnittlauch.waterpump.pin = nodemcu::D2;
@@ -193,9 +203,14 @@ void setup() {
 }
 
 void loop() {
+  int delayDuration = 30000;
+  if (thymian.isActive() || basilikum.isActive() || schnittlauch.isActive()) {
+      // check more frequently
+      delayDuration = 250;
+  }
   // put your main code here, to run repeatedly: 
-  delay(250);
+  delay(delayDuration);
   errors::logIfError(thymian.checkCycle());
-  //basilikum.checkCycle();
+  errors::logIfError(basilikum.checkCycle());
   //schnittlauch.checkCycle();
 }
