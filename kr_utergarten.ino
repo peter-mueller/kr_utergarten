@@ -64,9 +64,9 @@ namespace devices {
       return rangedPercentage;
     } 
     
-    boolean isWet() {
+    boolean isWetOrInAir() {
       const int percentage = getWettnessPercent();
-      return percentage >= wetTresholdPercentage;
+      return percentage >= wetTresholdPercentage || percentage <= 5;
     }
     
     virtual errors::Error init() {
@@ -141,12 +141,12 @@ namespace garten {
     }
 
     
-    if (moistureSensor.isWet()) {
+    if (moistureSensor.isWetOrInAir()) {
       waterpump.turnOff();
       t = timer::TimerInaktiv;
     } else {
       if (!t.isActive()) {
-        t = timer::Timer(60);
+        t = timer::Timer(10);
       }
       if (t.isActive() && t.isExpired()) {
         waterpump.turnOff();
@@ -175,6 +175,9 @@ namespace garten {
 garten::PflanzenWasserVersorgung thymian("Thymian");
 garten::PflanzenWasserVersorgung basilikum("Basilikum");
 garten::PflanzenWasserVersorgung schnittlauch("Schnittlauch");
+garten::PflanzenWasserVersorgung koriander("Koriander");
+
+timer::Timer deepSleepAfterTimer(60);
 
 void setup() {
   logger::init();
@@ -185,26 +188,40 @@ void setup() {
   // put your setup code here, to run once:
   thymian.moistureSensor.pin = nodemcu::A0;
   thymian.moistureSensor.activatePin = D5;
-  thymian.moistureSensor.analogValueInWater = 400;
-  basilikum.moistureSensor.analogValueInAir = 800;
+  thymian.moistureSensor.analogValueInWater = 382;
+  thymian.moistureSensor.analogValueInAir = 797;
   thymian.waterpump.pin = nodemcu::D4;
   errors::logIfError(thymian.init());
   
   basilikum.moistureSensor.pin = nodemcu::A0;
   basilikum.moistureSensor.activatePin = D6;
-  basilikum.moistureSensor.analogValueInWater = 350;
-  basilikum.moistureSensor.analogValueInAir = 635;
+  basilikum.moistureSensor.analogValueInWater = 379;
+  basilikum.moistureSensor.analogValueInAir = 739;
   basilikum.waterpump.pin = nodemcu::D3;
   errors::logIfError(basilikum.init());
 
-  //schnittlauch.moistureSensor.pin = nodemcu::D7;
-  //schnittlauch.waterpump.pin = nodemcu::D2;
-  //errors::logIfError(schnittlauch.init());
+  schnittlauch.moistureSensor.pin = nodemcu::A0;
+  schnittlauch.moistureSensor.activatePin = D7;
+  schnittlauch.moistureSensor.analogValueInWater = 379;
+  schnittlauch.moistureSensor.analogValueInAir = 745;
+  schnittlauch.waterpump.pin = nodemcu::D2;
+  errors::logIfError(schnittlauch.init());
+
+  koriander.moistureSensor.pin = nodemcu::A0;
+  koriander.moistureSensor.activatePin = D8;
+  koriander.moistureSensor.analogValueInWater = 379;
+  koriander.moistureSensor.analogValueInAir = 710;
+  koriander.waterpump.pin = nodemcu::D1;
+  errors::logIfError(koriander.init());
 }
 
-void loop() {
-  int delayDuration = 30000;
-  if (thymian.isActive() || basilikum.isActive() || schnittlauch.isActive()) {
+void loop() {  
+  int delayDuration = 2000;
+  bool anyActive = thymian.isActive() || basilikum.isActive() || schnittlauch.isActive() || koriander.isActive();
+  if (!anyActive && deepSleepAfterTimer.isExpired()) {
+    ESP.deepSleep(10 /*min*/ * 60 /*sec*/ * 1000000);
+  }
+  if (anyActive) {
       // check more frequently
       delayDuration = 250;
   }
@@ -212,5 +229,6 @@ void loop() {
   delay(delayDuration);
   errors::logIfError(thymian.checkCycle());
   errors::logIfError(basilikum.checkCycle());
-  //schnittlauch.checkCycle();
+  errors::logIfError(schnittlauch.checkCycle());
+  errors::logIfError(koriander.checkCycle());
 }
