@@ -177,10 +177,38 @@ garten::PflanzenWasserVersorgung basilikum("Basilikum");
 garten::PflanzenWasserVersorgung schnittlauch("Schnittlauch");
 garten::PflanzenWasserVersorgung koriander("Koriander");
 
+storage::PersitentStorage deepSleepStorage;
 timer::Timer deepSleepAfterTimer(60);
+struct AbortetState {
+    bool thymianAborted = false;
+    bool basilikumAborted = false;
+    bool schnittlauchAborted = false;
+    bool korianderAborted = false;
+    
+    uint32_t toUint32Data() {
+      uint32_t mask = 0b0000;
+      if (thymianAborted)      {mask |= 0b0001;}
+      if (basilikumAborted)    {mask |= 0b0010;}
+      if (schnittlauchAborted) {mask |= 0b0100;}
+      if (korianderAborted)    {mask |= 0b1000;}
+      return mask;
+    }
+
+    uint32_t parseUint32Data(uint32_t data) {
+      thymianAborted =      (data & 0b0001) > 0;
+      basilikumAborted =    (data & 0b0010) > 0;
+      schnittlauchAborted = (data & 0b0100) > 0;
+      korianderAborted =    (data & 0b1000) > 0;
+    }
+    
+};
+AbortetState abortetState;
+
 
 void setup() {
   logger::init();
+  deepSleepStorage.restore();
+  abortetState.parseUint32Data(deepSleepStorage.getData());
 
   while (!Serial) {}
 
@@ -191,6 +219,9 @@ void setup() {
   thymian.moistureSensor.analogValueInWater = 382;
   thymian.moistureSensor.analogValueInAir = 797;
   thymian.waterpump.pin = nodemcu::D4;
+  if (abortetState.thymianAborted) {
+    thymian.abortError = errors::Error("PflanzenWasserVersorgung wurde zur Sicherheit deaktiviert, da die Pumpe länger als eine Minute am Stück lief.");
+  }
   errors::logIfError(thymian.init());
   
   basilikum.moistureSensor.pin = nodemcu::A0;
@@ -198,6 +229,9 @@ void setup() {
   basilikum.moistureSensor.analogValueInWater = 379;
   basilikum.moistureSensor.analogValueInAir = 739;
   basilikum.waterpump.pin = nodemcu::D3;
+  if (abortetState.basilikumAborted) {
+    basilikum.abortError = errors::Error("PflanzenWasserVersorgung wurde zur Sicherheit deaktiviert, da die Pumpe länger als eine Minute am Stück lief.");
+  }
   errors::logIfError(basilikum.init());
 
   schnittlauch.moistureSensor.pin = nodemcu::A0;
@@ -205,6 +239,9 @@ void setup() {
   schnittlauch.moistureSensor.analogValueInWater = 379;
   schnittlauch.moistureSensor.analogValueInAir = 745;
   schnittlauch.waterpump.pin = nodemcu::D2;
+  if (abortetState.schnittlauchAborted) {
+    schnittlauch.abortError = errors::Error("PflanzenWasserVersorgung wurde zur Sicherheit deaktiviert, da die Pumpe länger als eine Minute am Stück lief.");
+  }
   errors::logIfError(schnittlauch.init());
 
   koriander.moistureSensor.pin = nodemcu::A0;
@@ -212,6 +249,9 @@ void setup() {
   koriander.moistureSensor.analogValueInWater = 379;
   koriander.moistureSensor.analogValueInAir = 710;
   koriander.waterpump.pin = nodemcu::D1;
+  if (abortetState.korianderAborted) {
+    koriander.abortError = errors::Error("PflanzenWasserVersorgung wurde zur Sicherheit deaktiviert, da die Pumpe länger als eine Minute am Stück lief.");
+  }
   errors::logIfError(koriander.init());
 }
 
@@ -219,7 +259,8 @@ void loop() {
   int delayDuration = 2000;
   bool anyActive = thymian.isActive() || basilikum.isActive() || schnittlauch.isActive() || koriander.isActive();
   if (!anyActive && deepSleepAfterTimer.isExpired()) {
-    ESP.deepSleep(10 /*min*/ * 60 /*sec*/ * 1000000);
+    deepSleepStorage.store(abortetState.toUint32Data());
+    ESP.deepSleep(10/*min*/ * 60/*sec*/ * 1000000);
   }
   if (anyActive) {
       // check more frequently
@@ -227,8 +268,17 @@ void loop() {
   }
   // put your main code here, to run repeatedly: 
   delay(delayDuration);
+  
   errors::logIfError(thymian.checkCycle());
+  abortetState.thymianAborted = !thymian.abortError.isOk();
+
   errors::logIfError(basilikum.checkCycle());
+  abortetState.basilikumAborted = !basilikum.abortError.isOk();
+
   errors::logIfError(schnittlauch.checkCycle());
+  abortetState.schnittlauchAborted = !schnittlauch.abortError.isOk();
+
   errors::logIfError(koriander.checkCycle());
+  abortetState.korianderAborted = !koriander.abortError.isOk();
+  
 }
